@@ -8,8 +8,12 @@ env:
   REGISTRY_USERNAME: ${{ github.repository_owner }}/talos-builder
   # Extensions to bake into the installer image.
   # Format: space-separated list of image:tag references (digests resolved at build time).
+  # The TALOS_VERSION placeholder will be replaced with the resolved Talos version from the tag (e.g., v1.13.4).
   EXTENSION_ISCSI_IMAGE: ghcr.io/siderolabs/iscsi-tools:v0.2.0
-  EXTENSION_UTIL_LINUX_IMAGE: ghcr.io/siderolabs/util-linux-tools:2.41.2
+  EXTENSION_UTIL_LINUX_IMAGE: ghcr.io/siderolabs/util-linux-tools:2.42.0
+  EXTENSION_NUT_CLIENT_IMAGE: ghcr.io/siderolabs/nut-client:2.8.5
+  EXTENSION_VC4_IMAGE: ghcr.io/siderolabs/vc4:TALOS_VERSION
+  EXTENSION_REALTEK_FIRMWARE_IMAGE: ghcr.io/siderolabs/realtek-firmware:20260519
 
 jobs:
   build:
@@ -50,6 +54,7 @@ jobs:
           EXTENSIONS=""
           while IFS= read -r line; do
             IMAGE="${line#*=}"
+            IMAGE="${IMAGE//TALOS_VERSION/${{ env.TALOS_VERSION }}}"
             DIGEST=$(crane digest "$IMAGE")
             EXTENSIONS="$EXTENSIONS $IMAGE@$DIGEST"
           done < <(env | grep '^EXTENSION_')
