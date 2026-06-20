@@ -1,6 +1,6 @@
 PKG_VERSION := release-1.13
 PKG_COMMIT := 969f61c
-TALOS_VERSION := v1.13.2
+TALOS_VERSION := v1.13.4
 SBCOVERLAY_VERSION := v0.2.0
 
 PUSH ?= true
@@ -73,7 +73,8 @@ patches-pkgs:
 patches-talos:
 	cd "$(CHECKOUTS_DIRECTORY)/talos" && \
 		git am "$(PATCHES_DIRECTORY)/siderolabs/talos/0001-Patched-for-Raspberry-Pi-5.patch" && \
-		git am "$(PATCHES_DIRECTORY)/siderolabs/talos/0002-Makefile.patch"
+		git am "$(PATCHES_DIRECTORY)/siderolabs/talos/0002-Makefile.patch" && \
+		git am "$(PATCHES_DIRECTORY)/siderolabs/talos/0003-thinning-the-kernel-for-unneeded-modules.patch"
 
 patches-sbc-raspberrypi:
 	cd "$(CHECKOUTS_DIRECTORY)/sbc-raspberrypi" && \
