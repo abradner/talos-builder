@@ -183,13 +183,15 @@ clean: checkouts-clean
 # arguments. Every input is pinned by digest. See docs/cm5-lite-upstream.md.
 #
 UPSTREAM_IMAGER ?= ghcr.io/siderolabs/imager:v1.14.4@sha256:91d453a7cf57d499fe7fe7923e1e381b6e1535136367246d190e38486c11651d
+UPSTREAM_BASE_INSTALLER ?= ghcr.io/siderolabs/installer-base:v1.14.4@sha256:bc4757f02b2afab8a7176b85d9aff809d189db2975bee6494e503fe50eb03dee
 UPSTREAM_OVERLAY ?= ghcr.io/siderolabs/sbc-raspberrypi:v0.2.2@sha256:af82d9f97241fb66c5b660b03e9154fd54ba4560b58ed3b53765bb930d564167
 # sdhci.debug_quirks2=4 is SDHCI_QUIRK2_NO_1_8_V: no UHS-I, so the SD card
 # runs 3.3 V High Speed and the CM5 Lite never attempts the 1.8 V switch
 # that fails on some carriers.
 UPSTREAM_KERNEL_ARGS ?= sdhci.debug_quirks2=4
 UPSTREAM_OUT ?= $(PWD)/_out
-UPSTREAM_IMAGER_ARGS = --arch arm64 --overlay-name rpi_5 --overlay-image $(UPSTREAM_OVERLAY) \
+UPSTREAM_IMAGER_ARGS = --arch arm64 --base-installer-image $(UPSTREAM_BASE_INSTALLER) \
+	--overlay-name rpi_5 --overlay-image $(UPSTREAM_OVERLAY) \
 	$(foreach arg,$(UPSTREAM_KERNEL_ARGS),--extra-kernel-arg $(arg))
 
 .PHONY: upstream upstream-metal upstream-installer

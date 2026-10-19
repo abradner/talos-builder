@@ -37,17 +37,32 @@ jobs:
           set -euo pipefail
           val() { make -s --no-print-directory -f Makefile -f - <<<"print-$1: ; @echo \$($1)" "print-$1"; }
           IMAGER=$(val UPSTREAM_IMAGER)
+          BASE_INSTALLER=$(val UPSTREAM_BASE_INSTALLER)
           OVERLAY=$(val UPSTREAM_OVERLAY)
           KERNEL_ARGS=$(val UPSTREAM_KERNEL_ARGS)
           TAG="${GITHUB_REF_NAME}"
           TAG_TALOS=$(grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+' <<<"$TAG")
-          IMAGER_TALOS=$(sed -E 's/.*:(v[0-9]+\.[0-9]+\.[0-9]+)@.*/\1/' <<<"$IMAGER")
-          if [ "$TAG_TALOS" != "$IMAGER_TALOS" ]; then
-            echo "::error::tag $TAG names Talos $TAG_TALOS but the Makefile pins imager $IMAGER_TALOS"
-            exit 1
-          fi
+          # The digest selects the image; the tag text is only a label. Refuse
+          # a pin whose digest is not what its tag points at, so a stale digest
+          # can't ship under a newer version's name.
+          for ref in "$IMAGER" "$BASE_INSTALLER" "$OVERLAY"; do
+            pinned="${ref##*@}"
+            resolved=$(crane digest "${ref%@*}")
+            if [ "$pinned" != "$resolved" ]; then
+              echo "::error::${ref%@*} resolves to $resolved, but the Makefile pins $pinned"
+              exit 1
+            fi
+          done
+          for ref in "$IMAGER" "$BASE_INSTALLER"; do
+            ref_talos=$(sed -E 's/.*:(v[0-9]+\.[0-9]+\.[0-9]+)@.*/\1/' <<<"$ref")
+            if [ "$TAG_TALOS" != "$ref_talos" ]; then
+              echo "::error::tag $TAG names Talos $TAG_TALOS but the Makefile pins ${ref%@*}"
+              exit 1
+            fi
+          done
           {
             echo "IMAGER=$IMAGER"
+            echo "BASE_INSTALLER=$BASE_INSTALLER"
             echo "OVERLAY=$OVERLAY"
             echo "KERNEL_ARGS=$KERNEL_ARGS"
             echo "TALOS_VERSION=$TAG_TALOS"
@@ -90,13 +105,14 @@ jobs:
           | | |
           |---|---|
           | Imager | \`${IMAGER}\` |
+          | Base installer | \`${BASE_INSTALLER}\` |
           | Overlay | \`${OVERLAY}\` (rpi_5) |
           | Extra kernel args | \`${KERNEL_ARGS}\` |
           | Extensions | none |
           | Disk image | \`metal-arm64-rpi5.raw.xz\`, sha256 \`${IMAGE_SHA256}\` |
           | Installer | \`${INSTALLER}\` |
 
-          \`sdhci.debug_quirks2=4\` keeps the SD card at 3.3 V High Speed (no UHS-I), which avoids the 1.8 V switch failures (-84/-110, no mmcblk0) seen on some CM5 Lite carriers. See docs/cm5-lite-upstream.md for the reasoning and test results.
+          \`sdhci.debug_quirks2=4\` keeps the SD card at 3.3 V High Speed (no UHS-I), which avoids the 1.8 V switch failures (-84/-110, no mmcblk0) seen on some CM5 Lite carriers. See docs/cm5-lite-upstream.md for the reasoning and the boot-test results table. Boot-test each tag on the problem carrier before rollout.
 
           Verify provenance:
           \`\`\`bash

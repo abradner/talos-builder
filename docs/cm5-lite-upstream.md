@@ -5,6 +5,7 @@ The `upstream-cm5l` workflow (`.github/workflows/upstream.yaml`, `make upstream`
 | Input | Pin (in `Makefile`) |
 |---|---|
 | Talos imager | `ghcr.io/siderolabs/imager:v1.14.4@sha256:91d453a7…651d` |
+| Base installer | `ghcr.io/siderolabs/installer-base:v1.14.4@sha256:bc4757f0…3dee` |
 | Board overlay | `ghcr.io/siderolabs/sbc-raspberrypi:v0.2.2@sha256:af82d9f9…4167` (`rpi_5`) |
 | Kernel | the official Talos kernel inside the imager (6.18.57 for v1.14.4) |
 | Extensions | none |
@@ -29,18 +30,20 @@ Notes on the mechanism:
 
 ## Test results
 
-See "Boot test" in the release notes of each tag, and the summary below.
+Results are kept in this table. Release notes don't carry them, because a tag is published before it is boot-tested.
+
+Each boot was checked in `talosctl dmesg` for: the kernel argument on the command line; `mmc0: new high speed SD…` (High Speed, not UHS); zero `error -84`, `error -110`, `cannot verify signal voltage switch`, `Timeout waiting for hardware cmd interrupt` and `I/O error`; `end0` up at 1 Gbps; and `mmcblk0` plus `nvme0n1` in `talosctl get disks`. etcd ran on the SD card throughout, as extra I/O load.
 
 | Date | Image | Carrier | Card | Result |
 |---|---|---|---|---|
-| 2026-10-19 | Factory schematic `03fea4ec…` (same inputs as this pipeline) v1.14.4 | the carrier where Factory 1.14.1/1.14.2 lose SD | 64 GB SDXC (SPCC) | *in progress* |
+| 2026-10-19 | Factory schematic `03fea4ec…` v1.14.4 (same inputs as this pipeline, not byte-identical) | the carrier where Factory 1.14.1/1.14.2 lose SD | 64 GB SDXC (SPCC) | Pass: first boot, 5 × `talosctl reboot`, 1 hard power cycle. All High Speed, 0 SD errors, `end0` 1 Gbps, NVMe present |
 
 ## Bumping Talos
 
 1. Find the new imager digest: `crane digest ghcr.io/siderolabs/imager:vX.Y.Z`.
 2. Check Image Factory's overlay for that version: `curl -s https://factory.talos.dev/version/vX.Y.Z/overlays/official`, entry `rpi_5`. Use the same overlay version and digest.
-3. Update `UPSTREAM_IMAGER` and `UPSTREAM_OVERLAY` in the `Makefile`, then build locally with `make upstream UPSTREAM_OUT=/tmp/out`.
-4. Merge, then tag `vX.Y.Z-cm5l.1`. The workflow refuses to build if the tag's Talos version doesn't match the imager pin.
+3. Update `UPSTREAM_IMAGER`, `UPSTREAM_BASE_INSTALLER` (`crane digest ghcr.io/siderolabs/installer-base:vX.Y.Z`) and `UPSTREAM_OVERLAY` in the `Makefile`, then build locally with `make upstream UPSTREAM_OUT=/tmp/out`.
+4. Merge, then tag `vX.Y.Z-cm5l.1`. The workflow refuses to build if the tag's Talos version doesn't match the imager and base-installer pins, or if any pinned digest isn't what its tag currently resolves to.
 5. Boot-test the new image on the problem carrier before rolling it out: SD present (`talosctl get disks`), no `error -84`/`-110` in `dmesg`, `end0` up, across several reboots and a power cycle.
 
 If upstream ever fixes the voltage switch, try dropping the argument (`UPSTREAM_KERNEL_ARGS=`) and re-run the boot test.
