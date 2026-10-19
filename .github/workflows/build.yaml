@@ -2,6 +2,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+      # Upstream CM5 Lite builds have their own workflow (upstream.yaml).
+      - '!v*.*.*-cm5l.*'
 
 env:
   REGISTRY: ghcr.io
