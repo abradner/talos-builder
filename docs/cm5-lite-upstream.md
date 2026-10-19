@@ -1,5 +1,31 @@
 # Upstream Talos on CM5 Lite (SD boot)
 
+## Source of truth: Image Factory
+
+CM5 Lite nodes that boot from SD run **stock Image Factory Talos**, with a schematic that adds one kernel argument:
+
+```yaml
+overlay:
+  image: siderolabs/sbc-raspberrypi
+  name: rpi_5
+customization:
+  extraKernelArgs:
+    - sdhci.debug_quirks2=4
+```
+
+Schematic ID `03fea4eca3bc739a71e1f327c381ebad9eb1cfe28b12d574ee670b201b052b32`. For v1.14.4:
+
+| | |
+|---|---|
+| Flash image | `https://factory.talos.dev/image/03fea4eca3bc739a71e1f327c381ebad9eb1cfe28b12d574ee670b201b052b32/v1.14.4/metal-arm64.raw.xz`, sha256 `817dedb3c38f26fa8e6177fea6647ab2b9f166534ecb7c7b50883925aedc28a1` |
+| Installer | `factory.talos.dev/metal-installer/03fea4eca3bc739a71e1f327c381ebad9eb1cfe28b12d574ee670b201b052b32@sha256:120e60cff87cdd0cd50fceff9c115b375675b622eabc6071f11928b8079dd9ca` (tag `v1.14.4`) |
+
+**Upgrade by digest only.** A Talos 1.14.4 node pulls a `repo:tag@sha256:…` installer ref and then fails the upgrade with `installer image "…" not found in containerd store`. The same image as `repo@sha256:…` upgrades fine. Measured on 2026-10-19.
+
+The rest of this doc describes the self-built fallback. It builds the same thing from the same official inputs, in this repo's CI, so it can be published and attested here. Use it if Image Factory is unavailable, or if a real patch is ever needed. `v1.14.4-cm5l.1` is published and was boot-tested (below).
+
+## Self-built fallback
+
 The `upstream-cm5l` workflow (`.github/workflows/upstream.yaml`, `make upstream`) builds Talos for Raspberry Pi CM5 Lite nodes that boot from SD. It uses official inputs only:
 
 | Input | Pin (in `Makefile`) |
@@ -26,7 +52,7 @@ What was ruled out:
 Notes on the mechanism:
 - `debug_quirks2` **replaces** the host's `quirks2` when the capabilities are read. `sdhci-brcmstb` ORs in `SDHCI_QUIRK2_PRESET_VALUE_BROKEN` afterwards, so nothing it needs is lost.
 - The argument applies to every SDHCI host. On a CM5 Lite the other one is the Wi-Fi SDIO bus, which doesn't use 1.8 V signalling.
-- The imager bakes the argument into the installer's command line, so `talosctl upgrade -i <this installer>` keeps it. An upgrade with any other installer drops it.
+- The argument is baked into the installer's command line (Image Factory's and this pipeline's alike), so `talosctl upgrade -i <installer>` keeps it. An upgrade with any other installer drops it, and the SD is lost on the next boot.
 
 ## Test results
 
@@ -36,9 +62,16 @@ Each boot was checked in `talosctl dmesg` for: the kernel argument on the comman
 
 | Date | Image | Carrier | Card | Result |
 |---|---|---|---|---|
-| 2026-10-19 | Factory schematic `03fea4ec…` v1.14.4 (same inputs as this pipeline, not byte-identical) | the carrier where Factory 1.14.1/1.14.2 lose SD | 64 GB SDXC (SPCC) | Pass: first boot, 5 × `talosctl reboot`, 1 hard power cycle. All High Speed, 0 SD errors, `end0` 1 Gbps, NVMe present |
+| 2026-10-19 | Factory schematic `03fea4ec…` v1.14.4 | the carrier where Factory 1.14.1/1.14.2 lose SD | 64 GB SDXC (SPCC) | Pass: first boot, 5 × `talosctl reboot`, 1 hard power cycle. All High Speed, 0 SD errors, `end0` 1 Gbps, NVMe present |
+| 2026-10-19 | then `talosctl upgrade` to this repo's `v1.14.4-cm5l.1` installer (digest-only ref) | same board | same card | Pass: slot A→B, argument kept, High Speed, 0 SD errors |
+| 2026-10-19 | **control:** then `talosctl upgrade` to bare Factory v1.14.4 (schematic `a636242d…`, no argument) | same board | same card | **Fail**: 799 cycles of `new UHS-I speed SDR104` → `cannot verify signal voltage switch` → `unable to read partition table` → `card removed` in about 4 minutes. No usable `mmcblk0`; the node fell back to maintenance mode |
+| 2026-10-19 | Factory schematic `03fea4ec…` v1.14.4, freshly flashed | same board | 64 GB SDXC (EC1S5, the model that failed on this carrier under bare Factory 1.14.1/1.14.2) | Pass: maintenance boot, apply-config, 3 × `talosctl reboot`, then `talosctl upgrade` to the Factory installer by digest (A→B). All High Speed, 0 SD errors, `end0` 1 Gbps, NVMe present |
 
 ## Bumping Talos
+
+**Image Factory (the normal path):** the schematic doesn't change. Take the new version's image and installer from the same schematic ID, resolve the installer digest (`crane digest factory.talos.dev/metal-installer/<schematic>:vX.Y.Z`), and boot-test (step 5 below). Check that Factory's `rpi_5` overlay for the new version is one that has been tested, or test it: `curl -s https://factory.talos.dev/version/vX.Y.Z/overlays/official`.
+
+**Self-built fallback:**
 
 1. Find the new imager digest: `crane digest ghcr.io/siderolabs/imager:vX.Y.Z`.
 2. Check Image Factory's overlay for that version: `curl -s https://factory.talos.dev/version/vX.Y.Z/overlays/official`, entry `rpi_5`. Use the same overlay version and digest.
