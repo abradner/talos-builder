@@ -24,6 +24,8 @@ Each release contains disk images and installer images for the Raspberry Pi 5 pl
 
 ### Examples
 
+> These examples are for the **vendor-kernel** builds below. For a **CM5 Lite booting from SD**, don't use them: use the Image Factory schematic in [docs/cm5-lite-upstream.md](docs/cm5-lite-upstream.md), and upgrade with its installer **by digest only**. An installer without `sdhci.debug_quirks2=4` loses the SD card on some carriers.
+
 Initial:
 
 ```bash

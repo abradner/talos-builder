@@ -22,6 +22,12 @@ Schematic ID `03fea4eca3bc739a71e1f327c381ebad9eb1cfe28b12d574ee670b201b052b32`.
 
 **Upgrade by digest only.** A Talos 1.14.4 node pulls a `repo:tag@sha256:…` installer ref and then fails the upgrade with `installer image "…" not found in containerd store`. The same image as `repo@sha256:…` upgrades fine. Measured on 2026-10-19.
 
+Why this and not the alternatives:
+- **Not a vendor-kernel build** (the Pi Foundation kernel, as this repo's `make pi5` and its upstream johnlaur/talos-builder do). Those are community-lineage builds with their own release cadence. This repo's one vendor build (v1.13.4) never got through CI, and the upstream it forks has published nothing since v1.13.2. Official inputs carry no such dependency.
+- **Not a device-tree patch** (siderolabs/sbc-raspberrypi#98). The CM5 Lite DTB is already correct (see "What was ruled out" below).
+- **Not stock Factory without the argument.** It loses the SD on the affected carrier (the control run below).
+- **Not a gradual 1.13.x → 1.14.x promotion.** Every Factory 1.13.x ships overlay v0.2.0, from before the CM5 device-tree regeneration. 1.14.0 ships v0.2.1, which broke CM5 Ethernet. So there is no known-good intermediate hop.
+
 The rest of this doc describes the self-built fallback. It builds the same thing from the same official inputs, in this repo's CI, so it can be published and attested here. Use it if Image Factory is unavailable, or if a real patch is ever needed. `v1.14.4-cm5l.1` is published and was boot-tested (below).
 
 ## Self-built fallback
