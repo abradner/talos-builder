@@ -98,7 +98,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          INSTALLER="${INSTALLER_REPO}:${GITHUB_REF_NAME}@${INSTALLER_DIGEST}"
+          # Digest-only on purpose: a Talos 1.14.4 node pulls a repo:tag@digest
+          # ref, then fails the upgrade with "not found in containerd store".
+          INSTALLER="${INSTALLER_REPO}@${INSTALLER_DIGEST}"
           cat > notes.md <<EOF
           Official Talos ${TALOS_VERSION} for Raspberry Pi CM5 Lite booting from SD, built from official inputs with no kernel or overlay patches.
 
@@ -110,7 +112,7 @@ jobs:
           | Extra kernel args | \`${KERNEL_ARGS}\` |
           | Extensions | none |
           | Disk image | \`metal-arm64-rpi5.raw.xz\`, sha256 \`${IMAGE_SHA256}\` |
-          | Installer | \`${INSTALLER}\` |
+          | Installer | \`${INSTALLER}\` (tag \`${GITHUB_REF_NAME}\`) |
 
           \`sdhci.debug_quirks2=4\` keeps the SD card at 3.3 V High Speed (no UHS-I), which avoids the 1.8 V switch failures (-84/-110, no mmcblk0) seen on some CM5 Lite carriers. See docs/cm5-lite-upstream.md for the reasoning and the boot-test results table. Boot-test each tag on the problem carrier before rollout.
 
@@ -120,7 +122,7 @@ jobs:
           gh attestation verify oci://${INSTALLER} -R ${GITHUB_REPOSITORY}
           \`\`\`
 
-          Upgrade (always pass the installer explicitly):
+          Upgrade (always pass the installer explicitly, by digest only):
           \`\`\`bash
           talosctl upgrade --nodes <node> --image ${INSTALLER}
           \`\`\`

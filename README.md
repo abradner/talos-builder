@@ -1,6 +1,6 @@
 # Raspberry Pi 5 Talos Builder
 
-> **CM5 Lite, SD boot: use the upstream build.** Tags `v*.*.*-cm5l.*` build official Talos with the official `sbc-raspberrypi` overlay and no patches. Every input is pinned by digest, and the only customisation is one kernel argument, which keeps the SD card out of UHS-I. These are this fork's maintained CM5 Lite images. Why, how to bump, and test results: [docs/cm5-lite-upstream.md](docs/cm5-lite-upstream.md). The vendor-kernel pipeline described below is kept for reference.
+> **CM5 Lite, SD boot: use stock Image Factory with one kernel argument.** The source of truth is schematic `03fea4ec…` (`rpi_5` plus `sdhci.debug_quirks2=4`), which keeps the SD card out of UHS-I on carriers where it otherwise fails. This repo's `v*.*.*-cm5l.*` tags build the same image from the same official inputs as a self-built, attested fallback. Refs, reasoning, how to bump and test results: [docs/cm5-lite-upstream.md](docs/cm5-lite-upstream.md). The vendor-kernel pipeline described below is kept for reference.
 
 This repository builds custom Talos Linux images for the **Raspberry Pi 5**. It patches the Kernel and Talos build process to use the Linux Kernel source provided by [raspberrypi/linux](https://github.com/raspberrypi/linux).
 
@@ -23,6 +23,8 @@ So far, this release has been verified on:
 Each release contains disk images and installer images for the Raspberry Pi 5 platforms.
 
 ### Examples
+
+> These examples are for the **vendor-kernel** builds below. For a **CM5 Lite booting from SD**, don't use them: use the Image Factory schematic in [docs/cm5-lite-upstream.md](docs/cm5-lite-upstream.md), and upgrade with its installer **by digest only**. An installer without `sdhci.debug_quirks2=4` loses the SD card on some carriers.
 
 Initial:
 
