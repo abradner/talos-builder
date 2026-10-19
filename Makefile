@@ -176,3 +176,31 @@ pi5: checkouts-clean checkouts patches kernel initramfs-kernel installer-base im
 
 .PHONY: clean
 clean: checkouts-clean
+
+#
+# Upstream build: official Talos imager + official sbc-raspberrypi overlay,
+# no kernel or overlay patches. The only customisation is the kernel
+# arguments. Every input is pinned by digest. See docs/cm5-lite-upstream.md.
+#
+UPSTREAM_IMAGER ?= ghcr.io/siderolabs/imager:v1.14.4@sha256:91d453a7cf57d499fe7fe7923e1e381b6e1535136367246d190e38486c11651d
+UPSTREAM_OVERLAY ?= ghcr.io/siderolabs/sbc-raspberrypi:v0.2.2@sha256:af82d9f97241fb66c5b660b03e9154fd54ba4560b58ed3b53765bb930d564167
+# sdhci.debug_quirks2=4 is SDHCI_QUIRK2_NO_1_8_V: no UHS-I, so the SD card
+# runs 3.3 V High Speed and the CM5 Lite never attempts the 1.8 V switch
+# that fails on some carriers.
+UPSTREAM_KERNEL_ARGS ?= sdhci.debug_quirks2=4
+UPSTREAM_OUT ?= $(PWD)/_out
+UPSTREAM_IMAGER_ARGS = --arch arm64 --overlay-name rpi_5 --overlay-image $(UPSTREAM_OVERLAY) \
+	$(foreach arg,$(UPSTREAM_KERNEL_ARGS),--extra-kernel-arg $(arg))
+
+.PHONY: upstream upstream-metal upstream-installer
+upstream: upstream-metal upstream-installer
+
+upstream-metal:
+	mkdir -p "$(UPSTREAM_OUT)"
+	docker run --rm -v "$(UPSTREAM_OUT)":/out -v /dev:/dev --privileged $(UPSTREAM_IMAGER) metal $(UPSTREAM_IMAGER_ARGS)
+	zstd -d --rm -f "$(UPSTREAM_OUT)/metal-arm64.raw.zst" -o "$(UPSTREAM_OUT)/metal-arm64-rpi5.raw"
+	xz -T0 -f "$(UPSTREAM_OUT)/metal-arm64-rpi5.raw"
+
+upstream-installer:
+	mkdir -p "$(UPSTREAM_OUT)"
+	docker run --rm -v "$(UPSTREAM_OUT)":/out -v /dev:/dev --privileged $(UPSTREAM_IMAGER) installer $(UPSTREAM_IMAGER_ARGS)

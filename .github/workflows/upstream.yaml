@@ -1,0 +1,113 @@
+# Upstream CM5 Lite build: the official Talos imager and the official
+# sbc-raspberrypi overlay, every input pinned by digest in the Makefile, plus
+# kernel arguments. No kernel or overlay patches. See docs/cm5-lite-upstream.md.
+#
+# Tag format: v<talos version>-cm5l.<n>, e.g. v1.14.4-cm5l.1. The Talos
+# version in the tag must match the pinned imager, or the build stops.
+name: upstream-cm5l
+
+on:
+  push:
+    tags:
+      - 'v*.*.*-cm5l.*'
+
+jobs:
+  build:
+    permissions:
+      contents: write
+      packages: write
+      attestations: write
+      id-token: write
+    runs-on: ubuntu-24.04-arm
+    env:
+      INSTALLER_REPO: ghcr.io/${{ github.repository_owner }}/talos-builder/installer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: imjasonh/setup-crane@v0.4
+        with:
+          version: v0.20.5
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read pinned inputs and check the tag matches them
+        run: |
+          set -euo pipefail
+          val() { make -s --no-print-directory -f Makefile -f - <<<"print-$1: ; @echo \$($1)" "print-$1"; }
+          IMAGER=$(val UPSTREAM_IMAGER)
+          OVERLAY=$(val UPSTREAM_OVERLAY)
+          KERNEL_ARGS=$(val UPSTREAM_KERNEL_ARGS)
+          TAG="${GITHUB_REF_NAME}"
+          TAG_TALOS=$(grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+' <<<"$TAG")
+          IMAGER_TALOS=$(sed -E 's/.*:(v[0-9]+\.[0-9]+\.[0-9]+)@.*/\1/' <<<"$IMAGER")
+          if [ "$TAG_TALOS" != "$IMAGER_TALOS" ]; then
+            echo "::error::tag $TAG names Talos $TAG_TALOS but the Makefile pins imager $IMAGER_TALOS"
+            exit 1
+          fi
+          {
+            echo "IMAGER=$IMAGER"
+            echo "OVERLAY=$OVERLAY"
+            echo "KERNEL_ARGS=$KERNEL_ARGS"
+            echo "TALOS_VERSION=$TAG_TALOS"
+          } >> "$GITHUB_ENV"
+
+      - name: Build metal image and installer
+        run: make UPSTREAM_OUT="$PWD/_out" upstream
+
+      - name: Push installer
+        run: |
+          set -euo pipefail
+          crane push _out/installer-arm64.tar "${INSTALLER_REPO}:${GITHUB_REF_NAME}"
+          DIGEST=$(crane digest "${INSTALLER_REPO}:${GITHUB_REF_NAME}")
+          echo "INSTALLER_DIGEST=$DIGEST" >> "$GITHUB_ENV"
+          cp _out/metal-arm64-rpi5.raw.xz .
+          sha256sum metal-arm64-rpi5.raw.xz | tee metal-arm64-rpi5.raw.xz.sha256
+          echo "IMAGE_SHA256=$(cut -d' ' -f1 metal-arm64-rpi5.raw.xz.sha256)" >> "$GITHUB_ENV"
+
+      - name: Attest the disk image
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: metal-arm64-rpi5.raw.xz
+
+      - name: Attest the installer
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.INSTALLER_REPO }}
+          subject-digest: ${{ env.INSTALLER_DIGEST }}
+          push-to-registry: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          INSTALLER="${INSTALLER_REPO}:${GITHUB_REF_NAME}@${INSTALLER_DIGEST}"
+          cat > notes.md <<EOF
+          Official Talos ${TALOS_VERSION} for Raspberry Pi CM5 Lite booting from SD, built from official inputs with no kernel or overlay patches.
+
+          | | |
+          |---|---|
+          | Imager | \`${IMAGER}\` |
+          | Overlay | \`${OVERLAY}\` (rpi_5) |
+          | Extra kernel args | \`${KERNEL_ARGS}\` |
+          | Extensions | none |
+          | Disk image | \`metal-arm64-rpi5.raw.xz\`, sha256 \`${IMAGE_SHA256}\` |
+          | Installer | \`${INSTALLER}\` |
+
+          \`sdhci.debug_quirks2=4\` keeps the SD card at 3.3 V High Speed (no UHS-I), which avoids the 1.8 V switch failures (-84/-110, no mmcblk0) seen on some CM5 Lite carriers. See docs/cm5-lite-upstream.md for the reasoning and test results.
+
+          Verify provenance:
+          \`\`\`bash
+          gh attestation verify metal-arm64-rpi5.raw.xz -R ${GITHUB_REPOSITORY}
+          gh attestation verify oci://${INSTALLER} -R ${GITHUB_REPOSITORY}
+          \`\`\`
+
+          Upgrade (always pass the installer explicitly):
+          \`\`\`bash
+          talosctl upgrade --nodes <node> --image ${INSTALLER}
+          \`\`\`
+          EOF
+          gh release create "${GITHUB_REF_NAME}" metal-arm64-rpi5.raw.xz metal-arm64-rpi5.raw.xz.sha256 \
+            --title "${GITHUB_REF_NAME}" --notes-file notes.md

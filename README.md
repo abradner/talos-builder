@@ -1,5 +1,7 @@
 # Raspberry Pi 5 Talos Builder
 
+> **CM5 Lite, SD boot: use the upstream build.** Tags `v*.*.*-cm5l.*` build official Talos with the official `sbc-raspberrypi` overlay and no patches. Every input is pinned by digest, and the only customisation is one kernel argument, which keeps the SD card out of UHS-I. These are this fork's maintained CM5 Lite images. Why, how to bump, and test results: [docs/cm5-lite-upstream.md](docs/cm5-lite-upstream.md). The vendor-kernel pipeline described below is kept for reference.
+
 This repository builds custom Talos Linux images for the **Raspberry Pi 5**. It patches the Kernel and Talos build process to use the Linux Kernel source provided by [raspberrypi/linux](https://github.com/raspberrypi/linux).
 
 ## Tested on
